@@ -891,8 +891,10 @@ func xRefStreamDict(c context.Context, ctx *model.Context, o types.Object, objNr
 		return nil, err
 	}
 
-	// Decode xrefstream content
-	if err = saveDecodedStreamContent(nil, &sd, 0, 0, true); err != nil {
+	// Decode xrefstream content.
+	// XRefStreams are not encrypted, so there is nothing to decrypt, but decoding must still honor the
+	// configured resource limits.
+	if err = decodeXRefStreamContent(ctx, &sd); err != nil {
 		return nil, fmt.Errorf("xRefStreamDict: cannot decode stream for obj#:%d: %w", objNr, err)
 	}
 
@@ -3142,6 +3144,19 @@ func ensureStreamLength(sd *types.StreamDict, fixLength bool) error {
 	}
 
 	return nil
+}
+
+// decodeXRefStreamContent decodes an xref stream within ctx's decode limit.
+func decodeXRefStreamContent(ctx *model.Context, sd *types.StreamDict) error {
+	if len(sd.Raw) == 0 {
+		sd.Content = sd.Raw
+		return nil
+	}
+	err := sd.DecodeWithLimit(decodeLimit(ctx))
+	if errors.Is(err, filter.ErrUnsupportedFilter) {
+		return nil
+	}
+	return err
 }
 
 func decodeLimit(ctx *model.Context) int64 {
